@@ -31,6 +31,15 @@ Retained > 90% variance
 <img width="232" alt="image" src="https://github.com/user-attachments/assets/fd6f4c94-e699-4034-a0d6-15e54dfa01ba" />
 
 
+
+Applied logistic regression with LASSO regularization and used 5-fold cross-validation to select the optimal regularization parameter
+Model trained to classify participant gender based on PCA-reduced fMRI features
+
+
+
+
+
+
 # Model Performance:
 
 <img width="329" alt="image" src="https://github.com/user-attachments/assets/3bd6059e-8053-4efa-a96c-665fe8eaa573" />
