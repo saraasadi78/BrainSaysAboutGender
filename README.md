@@ -18,7 +18,10 @@ Each color shows how important a voxel was for the CNN's face classification, So
 
 4D data: (85×85×85×10) per subject
 
-
+Load and reshape NIfTI data to 10×614125 per subject (timepoints × 85×85×85)
+Normalize each time using z-score
+Concatenated into a matrix: 850 × 614,125
+PCA applied and 600 principal components retained for each subject 
 
 
 <img width="403" alt="image" src="https://github.com/user-attachments/assets/d6ced543-3db0-4ebc-8368-7540cf92584f" />
