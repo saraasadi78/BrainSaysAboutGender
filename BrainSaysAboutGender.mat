@@ -1,0 +1,200 @@
+% This script performs gender classification using PCA-reduced fMRI data and LASSO logistic regression
+
+niftiFolder = '/Users/face/';
+demoPath = '/Users/demographics_table.csv';
+
+niftiFiles = dir(fullfile(niftiFolder, '*.nii*'));
+numSubjects = length(niftiFiles);
+numTimepoints = 10;
+volumeSize = [85, 85, 85];
+n_voxels = prod(volumeSize);
+
+T = readtable(demoPath);
+rawIDs = T.Bids_number;
+gender_raw = T.Gender;
+
+subjectIDs = cellfun(@(s) sprintf('sub-%03d', str2double(regexprep(s, '[^\d]', ''))), rawIDs, 'UniformOutput', false);
+
+% Convert gender to binary: Female = 1, Male = 0
+gender_binary = strcmp(gender_raw, 'F');
+
+T_clean = table(subjectIDs, gender_binary, 'VariableNames', {'SubjectID', 'GenderBinary'});
+save('subject_gender_binary.mat', 'T_clean');
+
+allData = [];
+subject_order = {};
+
+fprintf('Loading and reshaping NIfTI files...\n');
+for i = 1:numSubjects
+    nii = load_untouch_nii(fullfile(niftiFolder, niftiFiles(i).name));
+    img = double(nii.img);
+    fprintf('Loaded subject %d\n', i);
+    for t = 1:numTimepoints
+        volVec = reshape(img(:,:,:,t), 1, n_voxels);
+        allData = [allData; volVec];
+    end
+    subNameRaw = erase(niftiFiles(i).name, '.nii');
+    subject_order{end+1} = sprintf('sub-%d', str2double(regexprep(subNameRaw, '[^\d]', '')));
+end
+
+whos allData;
+whos allLabels;
+
+fprintf('Normalizing data...\n');
+X = zscore(allData);
+fprintf('Normalizing done \n');
+%X = X';
+whos X;
+
+%fprintf('Original feature dimension after transpose: %d samples × %d voxels\n', size(X,1), size(X,2));
+fprintf('Original feature dimension: %d voxels\n', size(X,2));
+
+
+fprintf('Applying PCA...\n');
+nComponents = 600;
+[coeff, score, ~, ~, explained] = pca(X);
+X_reduced = score(:, 1:nComponents);
+whos X_reduced
+save('PCA_features.mat', 'X_reduced');
+
+figure;
+plot(cumsum(explained), 'LineWidth', 2);
+xlabel('Number of Principal Components');
+ylabel('Cumulative Variance Explained (%)');
+title('PCA Explained Variance');
+yline(95, '--r', '95% Threshold');
+
+
+sampleIndex = 1; sliceIndex = 43; pc_idx = 1;
+slice_before = reshape(X(sampleIndex,:), 85, 85, 85);
+loading_vector = coeff(:, pc_idx);
+slice_after = reshape(loading_vector, 85, 85, 85);
+
+
+% Subject-wise averaging
+X_subjects = zeros(numSubjects, nComponents);
+for i = 1:numSubjects
+     rows = (i-1)*numTimepoints + 1 : i*numTimepoints;
+     X_subjects(i,:) = mean(X_reduced(rows,:), 1);
+ end
+
+disp([subject_order(:), T.SubjectID(matchedIdx(validMatch))]);
+
+figure;
+subplot(1,2,1);
+imagesc(slice_before(:,:,sliceIndex));
+title('Original Signal'); axis image off; colormap jet; colorbar;
+subplot(1,2,2);
+imagesc(slice_after(:,:,sliceIndex));
+title('PCA'); axis image off; colormap jet; colorbar;
+
+
+[~, matchedIdx] = ismember(subject_order, T.SubjectID);
+validMatch = matchedIdx > 0;
+X_final = X_subjects(validMatch, :);
+y_final = T.GenderBinary(matchedIdx(validMatch));
+
+fprintf('Final dataset: %d subjects \u00d7 %d PCA features\n', size(X_final));
+disp(tabulate(y_final));
+
+[nSubjects, nFeatures] = size(X_final);
+
+y_final = double(y_final);   
+gender_counts = tabulate(y_final);
+disp(gender_counts);
+%whos counts
+
+disp(class(y_final))   % 'double'
+disp(unique(y_final))  % [0; 1]
+
+gender_counts = tabulate(y_final);
+counts = gender_counts(:,2);  % Extract counts
+labels = {'Male (0)', 'Female (1)'};
+figure;
+pie(counts);
+legend(labels, 'Location', 'bestoutside');
+title('Gender Distribution');
+
+
+% logistic regression with LASSO 
+fprintf('Fitting LASSO logistic regression...\n');
+[B, FitInfo] = lassoglm(X_final, y_final, 'binomial', 'Alpha', 1, 'CV', 5);
+idxLambdaMin = FitInfo.IndexMinDeviance;
+B_best = B(:, idxLambdaMin);
+intercept = FitInfo.Intercept(idxLambdaMin);
+
+% If Alpha = 0 → Ridge regression (L2 penalty)
+% If Alpha = 1 → LASSO
+% If 0 < Alpha < 1 → Elastic net
+
+
+X_linear = X_final * B_best + intercept;
+y_pred = X_linear > 0;
+accuracy = mean(y_pred == y_final);
+fprintf('LASSO Accuracy: %.2f%%\n', accuracy*100);
+
+
+[rocX, rocY, ~, AUC] = perfcurve(y_final, X_linear, 1);
+figure;
+plot(rocX, rocY, 'LineWidth', 2);
+xlabel('False Positive Rate'); ylabel('True Positive Rate');
+title(['ROC Curve (AUC = ' num2str(AUC, '%.2f') ')']);
+grid on;
+
+figure;
+gscatter(X_final(:,1), X_final(:,2), y_final, 'rb', 'o^');
+xlabel('PC1'); ylabel('PC2'); title('PCA: PC1 vs PC2 by Gender');
+legend('Male','Female'); grid on;
+
+
+% figure;
+% bar(accuracy * 100);
+% ylim([0 100]);
+% ylabel('Accuracy (%)');
+% title('LASSO Classification Accuracy');
+% text(1, accuracy * 100 + 2, sprintf('%.2f%%', accuracy * 100), ...
+%      'HorizontalAlignment', 'center', 'FontSize', 12, 'FontWeight', 'bold');
+% xticks(1);
+% xticklabels({'LASSO Logistic Regression'});
+
+
+y_true = double(y_final(:)); 
+y_pred = double(y_pred(:));    
+
+confMat = confusionmat(y_true, y_pred);
+figure;
+confusionchart(confMat, {'Male (0)', 'Female (1)'});
+title('Confusion Matrix'); 
+chart.FontSize = 18; 
+
+
+TN = confMat(1,1);  % True Negative
+FP = confMat(1,2);  % False Positive
+FN = confMat(2,1);  % False Negative
+TP = confMat(2,2);  % True Positive
+
+accuracy = (TP + TN) / sum(confMat(:));
+precision = TP / (TP + FP);
+recall = TP / (TP + FN);
+f1_score = 2 * (precision * recall) / (precision + recall);
+fprintf('Evaluation Metrics:\n');
+fprintf('Accuracy: %.2f%%\n', accuracy * 100);
+fprintf('Precision: %.2f%%\n', precision * 100);
+fprintf('Recall: %.2f%%\n', recall * 100);
+fprintf('F1 Score: %.2f%%\n', f1_score * 100);
+fprintf('Final dataset: %d subjects × %d PCA features\n', size(X_final));
+fprintf('Non-zero coefficients: %d\n', nnz(B_best));
+
+
+metrics = [accuracy, precision, recall, f1_score] * 100;
+metric_labels = {'Accuracy', 'Precision', 'Recall', 'F1 Score'};
+figure;
+barh(metrics, 'FaceColor', [0.2 0.6 0.8]);
+xlim([0 100]);
+set(gca, 'YTickLabel', metric_labels, 'YTick', 1:4);
+xlabel('Percentage (%)');
+title('Classification Performance Metrics');
+grid on;
+for i = 1:length(metrics)
+    text(metrics(i) + 2, i, sprintf('%.2f%%', metrics(i)), 'FontWeight', 'bold');
+end
