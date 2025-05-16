@@ -31,7 +31,7 @@ Retained > 90% variance
 <img width="232" alt="image" src="https://github.com/user-attachments/assets/fd6f4c94-e699-4034-a0d6-15e54dfa01ba" />
 
 
-#Model Performance:
+# Model Performance:
 
 <img width="329" alt="image" src="https://github.com/user-attachments/assets/3bd6059e-8053-4efa-a96c-665fe8eaa573" />
 
@@ -41,9 +41,11 @@ Retained > 90% variance
 
 Result: The model was able to differentiate gender-related brain activity during face processing with approximately 90% accuracy
 
-Conclusion
+
+# Conclusion:
 
 This project investigated gender differences in brain activity during face processing using CNN-based attribution maps. PCA and logistic regression revealed subtle distinctions between male and female neural patterns.
+
 
 <img width="415" alt="image" src="https://github.com/user-attachments/assets/5d3a4ca0-59ab-4933-a9a0-1bf1265de232" />
 
