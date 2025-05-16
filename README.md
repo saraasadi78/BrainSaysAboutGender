@@ -27,7 +27,10 @@ PCA applied and 600 principal components retained for each subject
 <img width="403" alt="image" src="https://github.com/user-attachments/assets/d6ced543-3db0-4ebc-8368-7540cf92584f" />
 
 
-850 samples (85 subjects × 10 timepoints). Each sample has 614,125 voxels (from 85×85×85 volume) After PCA: 850×614125 reduced to --> 850×600
+850 samples (85 subjects × 10 timepoints)
+Each sample has 614,125 voxels (from 85×85×85 volume)
+
+After PCA: 850×614125 reduced to --> 850×600
 
 Retained > 90% variance
 
